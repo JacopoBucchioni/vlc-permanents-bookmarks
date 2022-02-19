@@ -421,7 +421,7 @@ function showBookmarks()
             --local tmp = string.len(idx) + string.len(b.label) + 21
             if #text > #maxStr then maxStr = text end
         end
-        bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 16px; margin-left: 3px;'>"..maxStr.."</p>")
+        bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; ; margin-left: 30px'>"..maxStr.."</p>")
         -- bookmarks_dialog['invisible_label']:set_text(string.rep('¢', maxText))
         -- bookmarks_dialog['invisible_label']:set_text(string.rep('ㅤ', #maxText))
     end
