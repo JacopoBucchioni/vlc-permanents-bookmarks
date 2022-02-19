@@ -1,6 +1,5 @@
 # Permanents Bookmarks
-This VLC extension allows you to save bookmarks for your media files on a permanent basis
-
+This VLC extension allows you to save bookmarks for your media files and store them permanently
 ## Overview
 
 The default `Bookmark` of vlc cannot be stored permanently. If you close the media file, the bookmarks will disappear. So we need a bookmark management extension to store the bookmarks permanently.
