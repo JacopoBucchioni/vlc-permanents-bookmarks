@@ -18,7 +18,7 @@ function descriptor()
         author = "bucchio",
         url = 'https://github.com/JacopoBucchioni/vlc-permanents-bookmarks',
         shortdesc = "Bookmarks",
-        description = "Save bookmarks for your media files on a permanent basis.",
+        description = "Save bookmarks for your media files and store them permanently.",
         capabilities = {"menu", "input-listener"}
     }
 end
