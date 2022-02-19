@@ -18,14 +18,14 @@ function descriptor()
         author = "bucchio",
         url = 'https://github.com/JacopoBucchioni/vlc-permanents-bookmarks',
         shortdesc = "Bookmarks",
-        description = "Permanently save bookmarks for your media files",
+        description = "Save bookmarks for your media files on a permanent basis.",
         capabilities = {"menu", "input-listener"}
     }
 end
 
 -- First function to be called when the extension is activated
 function activate()
-    vlc.msg.dbg("[Activate extension] Welcome! Start saving bookmarks permanently!")
+    vlc.msg.dbg("[Activate extension] Welcome! Start saving bookmarks!")
     local ok, err = pcall(check_config)
     if not ok then
         vlc.msg.err(err)
