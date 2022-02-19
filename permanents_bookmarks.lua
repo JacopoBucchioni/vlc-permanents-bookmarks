@@ -13,10 +13,10 @@ local bookmarks_dialog = {}
 -- Script descriptor, called when the extensions are scanned
 function descriptor()
     return {
-        title = "Permanent Bookmarks",
+        title = "Permanents Bookmarks",
         version = "0.1",
         author = "bucchio",
-        url = 'https://github.com/JacopoBucchioni/vlc-permanent-bookmarks',
+        url = 'https://github.com/JacopoBucchioni/vlc-permanents-bookmarks',
         shortdesc = "Bookmarks",
         description = "Permanently save bookmarks for your media files",
         capabilities = {"menu", "input-listener"}
