@@ -25,7 +25,7 @@ end
 
 -- First function to be called when the extension is activated
 function activate()
-    vlc.msg.dbg("[Activate extension] Welcome! Start saving bookmarks!")
+    vlc.msg.dbg("[Activate extension] Welcome! Start saving your bookmarks!")
     local ok, err = pcall(check_config)
     if not ok then
         vlc.msg.err(err)
@@ -89,12 +89,21 @@ function load_bookmarks()
     mediaFile.uri = vlc.input.item():uri()
     if mediaFile.uri then
         local filePath = vlc.strings.make_path(mediaFile.uri)
-        mediaFile.dir, mediaFile.name = string.match(filePath, "^(.*[" .. slash .. "])([^" .. slash .. "]-).?[%a%d]*$")
+        if not filePath then
+            filePath = vlc.strings.decode_uri(mediaFile.uri)
+            local match  = string.match(filePath, "^.*[".. slash .."]([^" .. slash .. "]-).?[%a%d]*$")
+            if match then
+                filePath = match
+            end
+        else
+            mediaFile.dir, mediaFile.name = string.match(filePath, "^(.*[" .. slash .. "])([^" .. slash .. "]-).?[%a%d]*$")
+        end
         if not mediaFile.name then
             mediaFile.name = filePath
         end
+        vlc.msg.dbg("Video URI: ".. mediaFile.uri)
         vlc.msg.dbg("fileName: " .. mediaFile.name)
-        vlc.msg.dbg("fileDir: " .. mediaFile.dir)
+        vlc.msg.dbg("fileDir: " .. tostring(mediaFile.dir))
 
         getFileHash()
         if mediaFile.hash then
@@ -103,6 +112,75 @@ function load_bookmarks()
         end
 
     end
+    collectgarbage()
+end
+
+function getFileHash()
+    -- Calculate media hash
+    local data_start = ""
+    local data_end = ""
+    local chunk_size = 65536
+
+    local size
+    local ok
+    local err
+
+    -- Get data for hash calculation
+    vlc.msg.dbg("init Read hash data from stream")
+
+    local stream = vlc.stream(mediaFile.uri)
+    data_start = stream:read(chunk_size)
+    ok, size = pcall(stream.getsize, stream)
+    if not size then
+        vlc.msg.warn("Failed to get stream size: " .. size)
+        return false
+    end
+    mediaFile.bytesize = size
+    vlc.msg.dbg("File bytesize: " .. mediaFile.bytesize)
+
+    size = math.floor(size / 2)
+    ok, err = pcall(stream.seek, stream, size - chunk_size)
+    if not ok then
+        vlc.msg.warn("Failed to seek to the middle of the stream: " .. err)
+        return false
+    end
+    --data_start = stream:read(chunk_size)
+    data_end = stream:read(chunk_size)
+
+    vlc.msg.dbg("finish Read hash data from stream")
+    --stream = nil
+
+
+    -- Hash calculation
+    --local lo = size
+    local lo = mediaFile.bytesize
+    local hi = 0
+    local o, a, b, c, d, e, f, g, h
+    local hash_data = data_start .. data_end
+    local max_size = 4294967296
+    local overflow
+
+    for i = 1, #hash_data, 8 do
+        a, b, c, d, e, f, g, h = hash_data:byte(i, i + 7)
+        lo = lo + a + b * 256 + c * 65536 + d * 16777216
+        hi = hi + e + f * 256 + g * 65536 + h * 16777216
+
+        if lo > max_size then
+            overflow = math.floor(lo / max_size)
+            lo = lo - (overflow * max_size)
+            hi = hi + overflow
+        end
+
+        if hi > max_size then
+            overflow = math.floor(hi / max_size)
+            hi = hi - (overflow * max_size)
+        end
+    end
+
+    mediaFile.hash = string.format("%08x%08x", hi, lo)
+    vlc.msg.dbg("File hash: " .. mediaFile.hash)
+    collectgarbage()
+    return true
 end
 
 
@@ -142,15 +220,15 @@ end
 
 
 
-function getFileInfo()
+--[[function getFileInfo()
     local filePath = vlc.strings.make_path(mediaFile.uri)
-    --[[if not filePath then
-        vlc.msg.info("sono qui")
-        filePath = vlc.strings.decode_uri(media.uri)
-        vlc.msg.info(tostring(filePath))
-        filePath = string.match(filePath, "^.*[" .. slash .. "]([^" .. slash .. "]-).?[%a%d]*$")
-    else
-        vlc.msg.info("sono qua")]]
+    --if not filePath then
+        --vlc.msg.info("sono qui")
+        --filePath = vlc.strings.decode_uri(media.uri)
+        --vlc.msg.info(tostring(filePath))
+       -- filePath = string.match(filePath, "^.*[" .. slash .. "]([^" .. slash .. "]-).?[%a%d]*$")
+    --else
+        --vlc.msg.info("sono qua")
     mediaFile.dir, mediaFile.name = string.match(filePath, "^(.*[" .. slash .. "])([^" .. slash .. "]-).?[%a%d]*$")
     if not mediaFile.name then
         mediaFile.name = filePath
@@ -160,79 +238,8 @@ function getFileInfo()
     --file.CleanName = string.gsub(fileName, "[%._]", " ")
     --vlc.msg.dbg("fileCleanName: "..file.CleanName)
     collectgarbage()
-end
+end]]
 
-
-
-function getFileHash()
-    -- Calculate file hash
-    local data_start = ""
-    local data_end = ""
-    local chunk_size = 65536
-
-    local size
-    local ok
-    local err
-
-    -- Get data for hash calculation
-    vlc.msg.dbg("init Read hash data from stream")
-    local stream = vlc.stream(mediaFile.uri)
-    -- vlc.msg.dbg("initialized vlc stream")
-
-    ok, size = pcall(stream.getsize, stream)
-    if not size then
-        vlc.msg.warn("Failed to get stream size: " .. size)
-        return false
-    end
-    mediaFile.bytesize = size
-    vlc.msg.dbg("File bytesize: " .. mediaFile.bytesize)
-
-    size = math.floor(size / 2)
-    ok, err = pcall(stream.seek, stream, size - chunk_size)
-    if not ok then
-        vlc.msg.warn("Failed to seek to the middle of the stream: " .. err)
-        return false
-    end
-    data_start = stream:read(chunk_size)
-    data_end = stream:read(chunk_size)
-
-    vlc.msg.dbg("finish Read hash data from file")
-    stream = nil
-
-    if data_start == data_end then
-        vlc.msg.info("uguali")
-    end
-
-    -- Hash calculation
-    local lo = size
-    local hi = 0
-    local o, a, b, c, d, e, f, g, h
-    local hash_data = data_start .. data_end
-    local max_size = 4294967296
-    local overflow
-
-    for i = 1, #hash_data, 8 do
-        a, b, c, d, e, f, g, h = hash_data:byte(i, i + 7)
-        lo = lo + a + b * 256 + c * 65536 + d * 16777216
-        hi = hi + e + f * 256 + g * 65536 + h * 16777216
-
-        if lo > max_size then
-            overflow = math.floor(lo / max_size)
-            lo = lo - (overflow * max_size)
-            hi = hi + overflow
-        end
-
-        if hi > max_size then
-            overflow = math.floor(hi / max_size)
-            hi = hi - (overflow * max_size)
-        end
-    end
-
-    mediaFile.hash = string.format("%08x%08x", hi, lo)
-    vlc.msg.dbg("File hash: " .. mediaFile.hash)
-    collectgarbage()
-    return true
-end
 
 
 
