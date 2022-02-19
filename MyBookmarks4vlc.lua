@@ -1,75 +1,63 @@
--------------- Global variables -------------
-local file = {
-    uri = nil,
-    name = nil,
-    hash = nil,
-    dir = nil,
-}
-local bookmarkFilePath = nil
---local input = nil
+-------------- Global variables --------------------------------------
+local mediaFile = {}
+local input = nil
 local Bookmarks = {}
+local bookmarkFilePath = nil
 local selectedBookmarkId = nil
 --UI
 local dialog_UI = nil
 local bookmarks_dialog = {}
-
-local csv_options = {
-    import = {
-        text = "Import",
-        message_text = "Specify the path of the CSV file with the bookmarks you want to import",
-        function_ = function()
-        end
-    },
-    export = {
-        text = "Export",
-        message_text = "Specify the path where you want to save the CSV file containing bookmarks",
-        function_ = function()
-        end
-    },
-}
------------------------------------------------
+-----------------------------------------------------------------------
 
 -- VLC defined callback functions --------------------------------------
 -- Script descriptor, called when the extensions are scanned
 function descriptor()
     return {
-        title = "MyBookmarks4vlc",
-        version = "1.0",
+        title = "Permanent Bookmarks",
+        version = "0.1",
         author = "bucchio",
-        url = '',
-        shortdesc = "MyBookmarks4vlc",
-        description = "",
-        capabilities = {"menu", "playing-listener"}
+        url = 'https://github.com/JacopoBucchioni/vlc-permanent-bookmarks',
+        shortdesc = "Bookmarks",
+        description = "Permanently save bookmarks for your media files",
+        capabilities = {"menu", "input-listener"}
     }
 end
 
 -- First function to be called when the extension is activated
 function activate()
-    vlc.msg.dbg("[Activate extension] Welcome! Start saving your favorite moments in your videos permanently!")
-
-    if not check_config() then
-        vlc.msg.err("Unsupported VLC version")
+    vlc.msg.dbg("[Activate extension] Welcome! Start saving bookmarks permanently!")
+    local ok, err = pcall(check_config)
+    if not ok then
+        vlc.msg.err(err)
         return false
     end
 
-    if vlc.input.item() then
-        if getFileHash() then
-            bookmarkFilePath = bookmarksDir..slash..file.hash
-            Bookmarks = table_load(bookmarkFilePath)
-            --load_bookmarks()
-        end
+    input = vlc.object.input()
+    if input then
+        load_bookmarks()
         show_main_gui()
-    
-    else
+       else
         show_info_gui()
     end
 end
 
+-- related to capabilities={"input-listener"} in descriptor()
+-- triggered by Start/Stop media input event
 function input_changed()
-    vlc.msg.dbg("Input changed")
-    collectgarbage()
-    --set_interface_main()
-    collectgarbage()
+    vlc.msg.dbg("[Input changed]")
+    if dialog_UI then
+        if vlc.input.item() then
+            load_bookmarks()
+            showBookmarks()
+            dialog_UI:show()
+        else
+            dialog_UI:hide()
+        end
+    end
+end
+
+-- triggered by available media input meta data?
+function meta_changed()
 end
 
 -- Called when the extension dialog is close
@@ -97,115 +85,35 @@ end
 -- End VLC defined callback functions ----------------------------------
 
 
+function load_bookmarks()
+    mediaFile.uri = vlc.input.item():uri()
+    if mediaFile.uri then
+        local filePath = vlc.strings.make_path(mediaFile.uri)
+        mediaFile.dir, mediaFile.name = string.match(filePath, "^(.*[" .. slash .. "])([^" .. slash .. "]-).?[%a%d]*$")
+        if not mediaFile.name then
+            mediaFile.name = filePath
+        end
+        vlc.msg.dbg("fileName: " .. mediaFile.name)
+        vlc.msg.dbg("fileDir: " .. mediaFile.dir)
 
-
-
-function getFileInfo(item)
-    if not item then
-        item = getInputItem()
-    end
-    
-    file.uri = item:uri()
-    vlc.msg.dbg("Video URI: " .. file.uri)
-    local filePath = vlc.strings.make_path(file.uri)
-    if not filePath then
-        filePath = vlc.strings.decode_uri(file.uri)
-        filePath = string.match(filePath, "^.*[" .. slash .. "]([^" .. slash .. "]-).?[%a%d]*$")
-    else
-        file.dir, file.name = string.match(filePath, "^(.*[" .. slash .. "])([^" .. slash .. "]-).?[%a%d]*$")
-    end
-    if not file.name then
-        file.name = filePath
-    end
-    vlc.msg.dbg("media name: "..item:name())
-    vlc.msg.dbg("fileName: "..file.name)
-    vlc.msg.dbg("filePath: "..file.dir..slash..file.name)
-    --file.CleanName = string.gsub(fileName, "[%._]", " ")
-    --vlc.msg.dbg("fileCleanName: "..file.CleanName)
-
-    --vlc.msg.dbg("file info: "..(dump_xml(file)))
-    
-    collectgarbage()
-end
-
-function getFileHash()
-    -- Calculate file hash
-
-    local item = getInputItem()
-
-    if not item then
-        vlc.msg.err("Can't get input item")
-      return false
-    end
-
-    getFileInfo(item)
-
-    local data_start = ""
-    local data_end = ""
-    local size
-    local chunk_size = 65536
-    local ok
-    local err
-
-    -- Get data for hash calculation
-    vlc.msg.dbg("Read hash data from stream")
-
-    local file_ = vlc.stream(file.uri)
-
-    data_start = file_:read(chunk_size)
-    ok, size = pcall(file_.getsize, file_)
-    if not size then
-        vlc.msg.warn("Failed to get stream size: " .. size)
-        return false
-    end
-    ok, err = pcall(file_.seek, file_, size - chunk_size)
-    if not ok then
-        vlc.msg.warn("Failed to seek to the end of the stream: " .. err)
-        return false
-    end
-    data_end = file_:read(chunk_size)
-
-    -- Hash calculation
-    local lo = size
-    local hi = 0
-    local o, a, b, c, d, e, f, g, h
-    local hash_data = data_start .. data_end
-    local max_size = 4294967296
-    local overflow
-
-    for i = 1, #hash_data, 8 do
-        a, b, c, d, e, f, g, h = hash_data:byte(i, i + 7)
-        lo = lo + a + b * 256 + c * 65536 + d * 16777216
-        hi = hi + e + f * 256 + g * 65536 + h * 16777216
-
-        if lo > max_size then
-            overflow = math.floor(lo / max_size)
-            lo = lo - (overflow * max_size)
-            hi = hi + overflow
+        getFileHash()
+        if mediaFile.hash then
+            bookmarkFilePath = bookmarksDir .. slash .. mediaFile.hash
+            Bookmarks = table_load(bookmarkFilePath)
         end
 
-        if hi > max_size then
-            overflow = math.floor(hi / max_size)
-            hi = hi - (overflow * max_size)
-        end
     end
-
-    file.bytesize = size
-    file.hash = string.format("%08x%08x", hi, lo)
-    vlc.msg.dbg("File hash: " .. file.hash)
-    vlc.msg.dbg("bytesize: " .. file.bytesize)
-    collectgarbage()
-    return true
 end
+
 
 
 function check_config()
     slash = package.config:sub(1, 1)
-    if slash == "\\" then
+    --[[if slash == "\\" then
         os = "win"
     else
         os = "lin"
-    end
+    end]]
     bookmarksDir = vlc.config.userdatadir()
 
     local res, err = vlc.io.mkdir(bookmarksDir, "0700")
@@ -233,215 +141,98 @@ function check_config()
 end
 
 
---[[function load_bookmark_file()
-    bookmarkFilePath = bookmarksDir..slash..file.hash
 
-    if file_exist(bookmarkFilePath) then
-        vlc.msg.dbg("Loading bookmarks file: " .. bookmarkFilePath)
-        
-
-
+function getFileInfo()
+    local filePath = vlc.strings.make_path(mediaFile.uri)
+    --[[if not filePath then
+        vlc.msg.info("sono qui")
+        filePath = vlc.strings.decode_uri(media.uri)
+        vlc.msg.info(tostring(filePath))
+        filePath = string.match(filePath, "^.*[" .. slash .. "]([^" .. slash .. "]-).?[%a%d]*$")
     else
-        vlc.msg.dbg("No bookmarks for file "..file.name)
+        vlc.msg.info("sono qua")]]
+    mediaFile.dir, mediaFile.name = string.match(filePath, "^(.*[" .. slash .. "])([^" .. slash .. "]-).?[%a%d]*$")
+    if not mediaFile.name then
+        mediaFile.name = filePath
     end
-end
-
-function create_file(path)
-    
-end
-
-function load_bookmarks()
-    local filePath = bookmarksDir..slash.."data.xml"
-    local file = io.open(filePath, "rb")
-    if not file then return false end
-    local resp = file:read("*all")
-    file:flush()
-    --bookmarks = parse_xml(resp)
-    --vlc.msg.dbg("bookmarks: "..dump_for_debug(bookmarks))
-    table.sort(bookmarks, function(a, b)
-        return (tonumber(a[2][2][2][2]["time"])) < tonumber(b[2][2][2][2]["time"])
-    end)
-    vlc.msg.dbg(bookmarks[2][2][2][2])
+    vlc.msg.dbg("fileName: "..mediaFile.name)
+    vlc.msg.dbg("fileDir: "..mediaFile.dir)
+    --file.CleanName = string.gsub(fileName, "[%._]", " ")
+    --vlc.msg.dbg("fileCleanName: "..file.CleanName)
     collectgarbage()
-end]]
+end
 
 
 
+function getFileHash()
+    -- Calculate file hash
+    local data_start = ""
+    local data_end = ""
+    local chunk_size = 65536
 
-function file_exist(name) -- test readability
-    if not name or trim(name) == "" then
+    local size
+    local ok
+    local err
+
+    -- Get data for hash calculation
+    vlc.msg.dbg("init Read hash data from stream")
+    local stream = vlc.stream(mediaFile.uri)
+    -- vlc.msg.dbg("initialized vlc stream")
+
+    ok, size = pcall(stream.getsize, stream)
+    if not size then
+        vlc.msg.warn("Failed to get stream size: " .. size)
         return false
     end
-    local f = vlc.io.open(name, "r")
-    if f ~= nil then
-        return true
-    else
+    mediaFile.bytesize = size
+    vlc.msg.dbg("File bytesize: " .. mediaFile.bytesize)
+
+    size = math.floor(size / 2)
+    ok, err = pcall(stream.seek, stream, size - chunk_size)
+    if not ok then
+        vlc.msg.warn("Failed to seek to the middle of the stream: " .. err)
         return false
     end
-end
+    data_start = stream:read(chunk_size)
+    data_end = stream:read(chunk_size)
 
-function trim(str)
-    if not str then
-        return ""
+    vlc.msg.dbg("finish Read hash data from file")
+    stream = nil
+
+    if data_start == data_end then
+        vlc.msg.info("uguali")
     end
-    return string.gsub(str, "^[\r\n%s]*(.-)[\r\n%s]*$", "%1")
-end
 
+    -- Hash calculation
+    local lo = size
+    local hi = 0
+    local o, a, b, c, d, e, f, g, h
+    local hash_data = data_start .. data_end
+    local max_size = 4294967296
+    local overflow
 
+    for i = 1, #hash_data, 8 do
+        a, b, c, d, e, f, g, h = hash_data:byte(i, i + 7)
+        lo = lo + a + b * 256 + c * 65536 + d * 16777216
+        hi = hi + e + f * 256 + g * 65536 + h * 16777216
 
+        if lo > max_size then
+            overflow = math.floor(lo / max_size)
+            lo = lo - (overflow * max_size)
+            hi = hi + overflow
+        end
 
---[[function set_interface_main()
-    --dialog_UI:hide()
-    getFileInfo()
-    load_bookmark_file()
-    print_bookmarks()
-    --dialog_UI:show()
-end
-]]
-
-
-function close_dlg()
-    vlc.msg.dbg("Closing dialog")
-    if dialog_UI ~= nil then
-        -- dialog_UI:delete() -- Throw an error
-        dialog_UI:hide()
-    end
-    dialog_UI = nil
-    bookmarks_dialog = nil
-    bookmarks_dialog = {}
-    collectgarbage() -- ~ !important
-end
-
-function show_main_gui()
-    close_dlg()
-    main_dialog()
-    collectgarbage() -- ~ !important
-end
-
-function show_info_gui()
-    close_dlg()
-    info_dialog()
-    collectgarbage() -- ~ !important
-end
-
-function show_import_gui()
-    close_dlg()
-    csv_dialog(csv_options.import)
-    collectgarbage() -- ~ !important
-end
-function show_export_gui()
-    close_dlg()
-    csv_dialog(csv_options.export)
-    collectgarbage() -- ~ !important
-end
-
-function info_dialog()
-    vlc.msg.dbg("Creating Info dialog")
-    dialog_UI = vlc.dialog("Info")
-    dialog_UI:add_label("Please open a media file before running this extension")
-    -- dialog_UI:show()
-end
-
-function csv_dialog(option)
-    vlc.msg.dbg("Creating " .. option.text .. " dialog")
-    dialog_UI = vlc.dialog(option.text .. " csv")
-    message_text = dialog_UI:add_label(option.message_text, 1, 1, 10, 1)
-
-    dialog_UI:add_label("Location : ", 1, 2, 1, 1)
-    location_input = dialog_UI:add_text_input(file.dir, 1, 3, 10, 1)
-
-    dialog_UI:add_button(option.text, option.function_, 1, 4, 1, 1)
-    dialog_UI:add_button("Cancel", show_main_gui, 2, 4, 1, 1)
-
-    -- dialog_UI:show()
-end
-
-function exportBookmarks()
-
-end
-
-function importBookmarks()
-
-end
-
-
-
-
-
-
-
---[[function parse_xml(data)
-    local tree = {}
-    local stack = {}
-    local tmp = {}
-    local level = 0
-    local op, tag, p, empty, val
-    table.insert(stack, tree)
-    local resolve_xml = vlc.strings.resolve_xml_special_chars
-
-    for op, tag, p, empty, val in string.gmatch(data, "[%s\r\n\t]*<(%/?)([%w:_]+)(.-)(%/?)>" ..
-        "[%s\r\n\t]*([^<]*)[%s\r\n\t]*") do
-        if op == "/" then
-            if level > 0 then
-                level = level - 1
-                table.remove(stack)
-            end
-        else
-            level = level + 1
-            if val == "" then
-                if type(stack[level][tag]) == "nil" then
-                    stack[level][tag] = {}
-                    table.insert(stack, stack[level][tag])
-                else
-                    if type(stack[level][tag][1]) == "nil" then
-                        tmp = nil
-                        tmp = stack[level][tag]
-                        stack[level][tag] = nil
-                        stack[level][tag] = {}
-                        table.insert(stack[level][tag], tmp)
-                    end
-                    tmp = nil
-                    tmp = {}
-                    table.insert(stack[level][tag], tmp)
-                    table.insert(stack, tmp)
-                end
-            else
-                if type(stack[level][tag]) == "nil" then
-                    stack[level][tag] = {}
-                end
-                stack[level][tag] = resolve_xml(val)
-                table.insert(stack, {})
-            end
-            if empty ~= "" then
-                stack[level][tag] = ""
-                level = level - 1
-                table.remove(stack)
-            end
+        if hi > max_size then
+            overflow = math.floor(hi / max_size)
+            hi = hi - (overflow * max_size)
         end
     end
+
+    mediaFile.hash = string.format("%08x%08x", hi, lo)
+    vlc.msg.dbg("File hash: " .. mediaFile.hash)
     collectgarbage()
-    return tree
+    return true
 end
-
-function dump_for_debug(o)
-    if type(o) == 'table' then
-        local s = '{ '
-        for k, v in pairs(o) do
-            if type(k) ~= 'number' then
-                k = '"' .. k .. '"'
-            end
-            s = s .. '[' .. k .. '] = ' .. dump_for_debug(v) .. ',\n'
-        end
-        return s .. '} '
-    else
-        if type(o) ~= 'number' then
-            return '"' .. o .. '"'
-        else
-            return o
-        end
-    end
-end]]
-
 
 
 
@@ -581,19 +372,6 @@ function table_binInsert(t, value, fcomp)
     return count
 end
 
-
-function getInputItem()
-    return vlc.item or vlc.input.item()
-end
-
-function getInput()
-    return vlc.object.input()
-end
-
-function getMediaTime(input)
-    return vlc.var.get(input, "time")
-end
-
 function getFormattedTime(time)
     local milliseconds = math.floor(time/1000)
     local seconds = math.floor((milliseconds / 1000) % 60)
@@ -605,8 +383,6 @@ end
 
 
 
-
-
 -- GUI Setup and buttons callbacks ----------------------------------------
 -- Create the main dialog
 function main_dialog()
@@ -615,7 +391,7 @@ function main_dialog()
     -- col, row, col_span, row_span, width, height
     dialog_UI = vlc.dialog("Save your Bookmarks")
     -- rename input box
-    dialog_UI:add_button("Add", addBookmark, 3, 1, 1, 1)
+    dialog_UI:add_button("Add", addBookmark, 1, 1, 1, 1)
     bookmarks_dialog['text_input'] = dialog_UI:add_text_input('Bookmark (' .. (#Bookmarks + 1) .. ')', 2, 1, 1, 1)
     -- buttons
     dialog_UI:add_button("Go", goToBookmark, 1, 2, 1, 1)
@@ -626,9 +402,11 @@ function main_dialog()
     -- dialog_UI:add_button("Export csv", show_export_gui, 1, 11, 1, 1)
     -- bookmarks list
     bookmarks_dialog['invisible_label'] = dialog_UI:add_label('', 2, 2, 0, 0)
-    bookmarks_dialog['bookmarks_list'] = dialog_UI:add_list(2, 2, 2, 10)
+    bookmarks_dialog['bookmarks_list'] = dialog_UI:add_list(2, 2, 1, 14)
+    --bookmarks_dialog['invisible_label'] = dialog_UI:add_label(string.rep('ㅤ', 24), 2, 2, 0, 0)
+    
     -- message_label
-    bookmarks_dialog['footer_message'] = dialog_UI:add_label("", 2, 12, 2, 1)
+    bookmarks_dialog['footer_message'] = dialog_UI:add_label('', 2, 16, 1, 1)
     showBookmarks()
     dialog_UI:show()
 end
@@ -636,15 +414,14 @@ end
 function showBookmarks()
     if bookmarks_dialog['bookmarks_list'] then
         bookmarks_dialog['bookmarks_list']:clear()
-        local maxText = ""
+        local maxStr = ''
         for idx, b in pairs(Bookmarks) do
-            local text = '#' .. idx .. ' - ' .. b.formattedTime .. '  -  ' .. b.label
+            local text = '#' .. idx .. ' - ' .. b.formattedTime .. 'ㅤ-ㅤ' .. b.label
             bookmarks_dialog['bookmarks_list']:add_value(text, idx)
-            if string.len(text) > string.len(maxText) then
-                maxText = text
-            end
+            --local tmp = string.len(idx) + string.len(b.label) + 21
+            if #text > #maxStr then maxStr = text end
         end
-        bookmarks_dialog['invisible_label']:set_text(maxText)
+        bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 16px; margin-left: 3px;'>"..maxStr.."</p>")
         -- bookmarks_dialog['invisible_label']:set_text(string.rep('¢', maxText))
         -- bookmarks_dialog['invisible_label']:set_text(string.rep('ㅤ', #maxText))
     end
@@ -662,8 +439,7 @@ function addBookmark()
                 selectedBookmarkId = nil
             else
                 local b = {}
-                local input = getInput()
-                b.time = getMediaTime(input)
+                b.time = vlc.var.get(vlc.object.input(), "time")
                 b.label = label
                 -- b.addedDate = os.date("%d/%m/%Y %X")
                 b.formattedTime = getFormattedTime(b.time)
@@ -678,7 +454,33 @@ function addBookmark()
             --[[bookmarks_dialog['footer_message'] = dialog_UI:add_label(
                 "<p style='margin-left: 8px;'><b>Please enter your bookmark title</b></p>", 2, 12, 2, 1)]]
             bookmarks_dialog['footer_message']:set_text(
-                "<p style='margin-left: 8px;'><b>Please enter your bookmark title</b></p>")
+                "<p style='margin-left: 8px;'>Please enter your bookmark title</p>")
+        end
+    end
+end
+
+function goToBookmark()
+    dlt_footer()
+    
+    if bookmarks_dialog['bookmarks_list'] then
+        local selection = bookmarks_dialog['bookmarks_list']:get_selection()
+        if next(selection) then
+            if tablelength(selection) == 1 then
+                for idx, _ in pairs(selection) do
+                    vlc.var.set(vlc.object.input(), "time", Bookmarks[idx].time)
+                    break
+                end
+            else
+                --[[bookmarks_dialog['footer_message'] = dialog_UI:add_label(
+                    "<p style='color:red; margin-left: 8px;'><b>Please select only one item</b></p>", 2, 12, 2, 1)]]
+                bookmarks_dialog['footer_message']:set_text(
+                    "<p style='margin-left: 8px;'>Please select only one item</p>")
+
+            end
+        else
+            --[[bookmarks_dialog['footer_message'] = dialog_UI:add_label(
+                "<p style='margin-left: 8px;'><b>Please select a item</b></p>", 2, 12, 2, 1)]]
+            bookmarks_dialog['footer_message']:set_text("<p style='margin-left: 8px;'>Please select a item</p>")
         end
     end
 end
@@ -699,12 +501,12 @@ function editBookmark()
                 --[[bookmarks_dialog['footer_message'] = dialog_UI:add_label(
                     "<p style='color:red; margin-left: 8px;'><b>Please select only one item</b></p>", 2, 12, 2, 1)]]
                 bookmarks_dialog['footer_message']:set_text(
-                    "<p style='color:red; margin-left: 8px;'><b>Please select only one item</b></p>")
+                    "<p style='margin-left: 8px;'>Please select only one item</p>")
             end
         else
             --[[bookmarks_dialog['footer_message'] = dialog_UI:add_label(
                 "<p style='margin-left: 8px;'><b>Please select a item</b></p>", 2, 12, 2, 1)]]
-            bookmarks_dialog['footer_message']:set_text("<p style='margin-left: 8px;'><b>Please select a item</b></p>")
+            bookmarks_dialog['footer_message']:set_text("<p style='margin-left: 8px;'>Please select a item</p>")
 
         end
     end
@@ -728,37 +530,11 @@ function removeBookmark()
             --[[bookmarks_dialog['footer_message'] = dialog_UI:add_label(
                 "<p style='margin-left: 8px;'><b>Please select items you want remove</b></p>", 2, 12, 2, 1)]]
             bookmarks_dialog['footer_message']:set_text(
-                "<p style='margin-left: 8px;'><b>Please select items you want remove</b></p>")
+                "<p style='margin-left: 8px;'>Please select items you want remove</p>")
         end
     end
 end
 
-function goToBookmark()
-    dlt_footer()
-    local input = getInput()
-
-    if bookmarks_dialog['bookmarks_list'] then
-        local selection = bookmarks_dialog['bookmarks_list']:get_selection()
-        if next(selection) then
-            if tablelength(selection) == 1 then
-                for idx, _ in pairs(selection) do
-                    vlc.var.set(input, "time", Bookmarks[idx].time)
-                    break
-                end
-            else
-                --[[bookmarks_dialog['footer_message'] = dialog_UI:add_label(
-                    "<p style='color:red; margin-left: 8px;'><b>Please select only one item</b></p>", 2, 12, 2, 1)]]
-                bookmarks_dialog['footer_message']:set_text(
-                    "<p style='color:red; margin-left: 8px;'><b>Please select only one item</b></p>")
-
-            end
-        else
-            --[[bookmarks_dialog['footer_message'] = dialog_UI:add_label(
-                "<p style='margin-left: 8px;'><b>Please select a item</b></p>", 2, 12, 2, 1)]]
-            bookmarks_dialog['footer_message']:set_text("<p style='margin-left: 8px;'><b>Please select a item</b></p>")
-        end
-    end
-end
 
 function dlt_footer()
     if bookmarks_dialog['footer_message'] then
@@ -772,8 +548,221 @@ end
 -- End GUI Setup and buttons callbacks -------------------------------------
 
 
+function close_dlg()
+    vlc.msg.dbg("Closing dialog")
+    if dialog_UI ~= nil then
+        -- dialog_UI:delete() -- Throw an error
+        dialog_UI:hide()
+    end
+    dialog_UI = nil
+    bookmarks_dialog = nil
+    bookmarks_dialog = {}
+    collectgarbage() -- ~ !important
+end
+
+function show_main_gui()
+    close_dlg()
+    main_dialog()
+    collectgarbage() -- ~ !important
+end
+
+function show_info_gui()
+    close_dlg()
+    info_dialog()
+    collectgarbage() -- ~ !important
+end
+
+function info_dialog()
+    vlc.msg.dbg("Creating Info dialog")
+    dialog_UI = vlc.dialog("Info")
+    dialog_UI:add_label("Please open a media file before running this extension")
+    -- dialog_UI:show()
+end
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--[[function init()
+    item = vlc.input.item()
+    input = vlc.object.input()
+    if item ~= nil and input ~= nil then
+        media.uri = item:uri()
+        media.title = item:name()
+        vlc.msg.info("Video URI: " .. media.uri)
+        vlc.msg.info("Video Title: " .. media.title)
+        
+        local parsed_uri = vlc.net.url_parse(item:uri())
+        if type(parsed_uri) == 'table' then
+            for id, v in pairs(parsed_uri) do
+                vlc.msg.info(tostring(id)..": "..tostring(v))
+            end
+        end
+        local file_stat = vlc.net.stat(vlc.strings.decode_uri(parsed_uri['path']))
+        vlc.msg.info(type(file_stat))
+        if type(file_stat) == 'table' then
+            for id, v in pairs(file_stat) do
+                vlc.msg.info(tostring(id)..": "..tostring(v))
+            end
+        end
+        
+        
+        getFileInfo()
+        getFileHash()
+
+        if media.hash then
+            bookmarkFilePath = bookmarksDir .. slash .. media.hash
+            Bookmarks = table_load(bookmarkFilePath)
+        end
+        if dialog_UI ~= nil then
+            showBookmarks()
+        else
+            show_main_gui()
+        end
+    else
+        show_info_gui()
+    end
+end
+
+local tmp = 0
+function input_canged()
+    vlc.msg.info("[Input changed]")
+    tmp = tmp + 1
+    vlc.msg.info(tmp)
+    local i = vlc.input.item()
+    local j = vlc.object.input()
+    if i == nil then
+        vlc.msg.info("vlc.input.item() = nil")
+    else
+        vlc.msg.info("different vlc.input.item() != nil")
+
+    end
+
+    if j == nil then
+        vlc.msg.info("same vlc.object.input() = nil")
+    else
+        vlc.msg.info("different vlc.object.input() != nil")
+        --local itm = vlc.var.get(vlc.object.input(), 'uri')
+        local file_stat = vlc.net.stat(vlc.strings.make_path(i:uri()))
+        if type(file_stat) == 'table' then
+            for id, v in pairs(file_stat) do
+                vlc.msg.info(tostring(id)..": "..tostring(v))
+            end
+        end
+
+    end
+    
+    media = nil
+    media = {}
+    bookmarkFilePath = nil
+    input = nil
+    Bookmarks = nil
+    Bookmarks = {}
+    selectedBookmarkId = nil
+
+    collectgarbage()
+    init()
+    --showBookmarks()
+    collectgarbage()
+
+end]]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--[[function show_import_gui()
+    close_dlg()
+    csv_dialog(csv_options.import)
+    collectgarbage() -- ~ !important
+end
+function show_export_gui()
+    close_dlg()
+    csv_dialog(csv_options.export)
+    collectgarbage() -- ~ !important
+end
+
+local csv_options = {
+    import = {
+        text = "Import",
+        message_text = "Specify the path of the CSV file with the bookmarks you want to import",
+        function_ = function()
+        end
+    },
+    export = {
+        text = "Export",
+        message_text = "Specify the path where you want to save the CSV file containing bookmarks",
+        function_ = function()
+        end
+    },
+}
+
+function csv_dialog(option)
+    vlc.msg.dbg("Creating " .. option.text .. " dialog")
+    dialog_UI = vlc.dialog(option.text .. " csv")
+    message_text = dialog_UI:add_label(option.message_text, 1, 1, 10, 1)
+
+    dialog_UI:add_label("Location : ", 1, 2, 1, 1)
+    location_input = dialog_UI:add_text_input(media.dir, 1, 3, 10, 1)
+
+    dialog_UI:add_button(option.text, option.function_, 1, 4, 1, 1)
+    dialog_UI:add_button("Cancel", show_main_gui, 2, 4, 1, 1)
+
+    -- dialog_UI:show()
+end
+
+function exportBookmarks()
+
+end
+
+function importBookmarks()
+
+end]]
 
 
 
@@ -835,3 +824,160 @@ end]]
         collectgarbage()
     end
 end]]
+
+
+
+
+
+
+
+
+--[[function load_bookmark_file()
+    bookmarkFilePath = bookmarksDir..slash..file.hash
+
+    if file_exist(bookmarkFilePath) then
+        vlc.msg.dbg("Loading bookmarks file: " .. bookmarkFilePath)
+        
+
+
+    else
+        vlc.msg.dbg("No bookmarks for file "..file.name)
+    end
+end
+
+function create_file(path)
+    
+end
+
+function load_bookmarks()
+    local filePath = bookmarksDir..slash.."data.xml"
+    local file = io.open(filePath, "rb")
+    if not file then return false end
+    local resp = file:read("*all")
+    file:flush()
+    --bookmarks = parse_xml(resp)
+    --vlc.msg.dbg("bookmarks: "..dump_for_debug(bookmarks))
+    table.sort(bookmarks, function(a, b)
+        return (tonumber(a[2][2][2][2]["time"])) < tonumber(b[2][2][2][2]["time"])
+    end)
+    vlc.msg.dbg(bookmarks[2][2][2][2])
+    collectgarbage()
+end]]
+
+
+
+
+--[[function file_exist(name) -- test readability
+    if not name or trim(name) == "" then
+        return false
+    end
+    local f = vlc.io.open(name, "r")
+    if f ~= nil then
+        return true
+    else
+        return false
+    end
+end
+
+function trim(str)
+    if not str then
+        return ""
+    end
+    return string.gsub(str, "^[\r\n%s]*(.-)[\r\n%s]*$", "%1")
+end]]
+
+
+
+
+--[[function set_interface_main()
+    --dialog_UI:hide()
+    getFileInfo()
+    load_bookmark_file()
+    print_bookmarks()
+    --dialog_UI:show()
+end
+]]
+
+
+
+
+
+
+
+
+
+
+--[[function parse_xml(data)
+    local tree = {}
+    local stack = {}
+    local tmp = {}
+    local level = 0
+    local op, tag, p, empty, val
+    table.insert(stack, tree)
+    local resolve_xml = vlc.strings.resolve_xml_special_chars
+
+    for op, tag, p, empty, val in string.gmatch(data, "[%s\r\n\t]*<(%/?)([%w:_]+)(.-)(%/?)>" ..
+        "[%s\r\n\t]*([^<]*)[%s\r\n\t]*") do
+        if op == "/" then
+            if level > 0 then
+                level = level - 1
+                table.remove(stack)
+            end
+        else
+            level = level + 1
+            if val == "" then
+                if type(stack[level][tag]) == "nil" then
+                    stack[level][tag] = {}
+                    table.insert(stack, stack[level][tag])
+                else
+                    if type(stack[level][tag][1]) == "nil" then
+                        tmp = nil
+                        tmp = stack[level][tag]
+                        stack[level][tag] = nil
+                        stack[level][tag] = {}
+                        table.insert(stack[level][tag], tmp)
+                    end
+                    tmp = nil
+                    tmp = {}
+                    table.insert(stack[level][tag], tmp)
+                    table.insert(stack, tmp)
+                end
+            else
+                if type(stack[level][tag]) == "nil" then
+                    stack[level][tag] = {}
+                end
+                stack[level][tag] = resolve_xml(val)
+                table.insert(stack, {})
+            end
+            if empty ~= "" then
+                stack[level][tag] = ""
+                level = level - 1
+                table.remove(stack)
+            end
+        end
+    end
+    collectgarbage()
+    return tree
+end]]
+
+
+--[[function dump_for_debug(o)
+    if type(o) == 'table' then
+        local s = '{ '
+        for k, v in pairs(o) do
+            if type(k) ~= 'number' then
+                k = '"' .. k .. '"'
+            end
+            s = s .. '[' .. k .. '] = ' .. dump_for_debug(v) .. ',\n'
+        end
+        return s .. '} '
+    else
+        if type(o) ~= 'number' then
+            return '"' .. o .. '"'
+        else
+            return o
+        end
+    end
+end]]
+
+
