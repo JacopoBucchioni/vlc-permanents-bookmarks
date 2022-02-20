@@ -442,7 +442,7 @@ function showBookmarks()
 
         count = math.ceil(count * 8.5) + 143
         if count < 480 then
-            bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; margin-left: 4px;'>"..maxText.."</p>")
+            bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; margin-left: 24px;'>"..maxText.."</p>")
         else
             bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; margin-left: 480px;'>.</p>")
         end
