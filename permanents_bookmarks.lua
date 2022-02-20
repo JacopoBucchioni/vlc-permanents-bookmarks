@@ -2,8 +2,8 @@
 local mediaFile = {}
 local input = nil
 local Bookmarks = {}
-local bookmarkFilePath = nil
 local selectedBookmarkId = nil
+local bookmarkFilePath = nil
 --UI
 local dialog_UI = nil
 local bookmarks_dialog = {}
@@ -45,15 +45,26 @@ end
 -- triggered by Start/Stop media input event
 function input_changed()
     vlc.msg.dbg("[Input changed]")
-    if dialog_UI then
-        if vlc.input.item() then
-            load_bookmarks()
+    input = vlc.object.input()
+    if input then
+        load_bookmarks()
+        --[[if dialog_UI then
             showBookmarks()
             dialog_UI:show()
-        else
-            dialog_UI:hide()
-        end
+        end]]
+        show_main_gui()
+
+    else
+        close_dlg()
+        -- TODO:
+        mediaFile = nil
+        mediaFile = {}
+        Bookmarks = nil
+        Bookmarks = {}
+        selectedBookmarkId = nil
+        bookmarkFilePath = nil
     end
+    collectgarbage()
 end
 
 -- triggered by available media input meta data?
@@ -86,6 +97,7 @@ end
 
 
 function load_bookmarks()
+    mediaFile.title = vlc.input.item():name()
     mediaFile.uri = vlc.input.item():uri()
     if mediaFile.uri then
         local filePath = vlc.strings.make_path(mediaFile.uri)
@@ -101,6 +113,7 @@ function load_bookmarks()
         if not mediaFile.name then
             mediaFile.name = filePath
         end
+        vlc.msg.dbg("Video Meta Title: ".. mediaFile.title)
         vlc.msg.dbg("Video URI: ".. mediaFile.uri)
         vlc.msg.dbg("fileName: " .. mediaFile.name)
         vlc.msg.dbg("fileDir: " .. tostring(mediaFile.dir))
@@ -180,7 +193,7 @@ function getFileHash()
     mediaFile.hash = string.format("%08x%08x", hi, lo)
     vlc.msg.dbg("File hash: " .. mediaFile.hash)
     collectgarbage()
-    return true
+    --return true
 end
 
 
@@ -193,7 +206,6 @@ function check_config()
         os = "lin"
     end]]
     bookmarksDir = vlc.config.userdatadir()
-
     local res, err = vlc.io.mkdir(bookmarksDir, "0700")
     if res ~= 0 and err ~= vlc.errno.EEXIST then
         vlc.msg.warn("Failed to create " .. bookmarksDir)
@@ -211,11 +223,10 @@ function check_config()
 
     if bookmarksDir then
         vlc.msg.dbg("Bookmarks directory: " .. bookmarksDir)
-        collectgarbage()
-        return true
+        --return true
     end
-    
-    return false
+    collectgarbage()
+    --return true
 end
 
 
@@ -367,7 +378,7 @@ function table_binInsert(t, value, fcomp)
           iStart,iState = iMid + 1,1
        end
     end
-    table.insert( t,(iMid+iState),value )
+    --table.insert( t,(iMid+iState),value )
     return (iMid+iState)
  end
 
@@ -408,10 +419,8 @@ function main_dialog()
     -- dialog_UI:add_button("Import csv", show_import_gui, 1, 10, 1, 1)
     -- dialog_UI:add_button("Export csv", show_export_gui, 1, 11, 1, 1)
     -- bookmarks list
-    bookmarks_dialog['invisible_label'] = dialog_UI:add_label('', 2, 2, 0, 0)
+    bookmarks_dialog['invisible_label'] = dialog_UI:add_label('', 2, 2, 0, 0) -- ~ before list !important
     bookmarks_dialog['bookmarks_list'] = dialog_UI:add_list(2, 2, 1, 14)
-    --bookmarks_dialog['invisible_label'] = dialog_UI:add_label(string.rep('ㅤ', 24), 2, 2, 0, 0)
-    
     -- message_label
     bookmarks_dialog['footer_message'] = dialog_UI:add_label('', 2, 16, 1, 1)
     showBookmarks()
@@ -421,16 +430,24 @@ end
 function showBookmarks()
     if bookmarks_dialog['bookmarks_list'] then
         bookmarks_dialog['bookmarks_list']:clear()
-        local maxStr = ''
+        local maxText = ''
+        local count = 0
         for idx, b in pairs(Bookmarks) do
             local text = '#' .. idx .. ' - ' .. b.formattedTime .. 'ㅤ-ㅤ' .. b.label
             bookmarks_dialog['bookmarks_list']:add_value(text, idx)
-            --local tmp = string.len(idx) + string.len(b.label) + 21
-            if #text > #maxStr then maxStr = text end
+            if #text > #maxText then maxText = text end
+            text = idx..b.label
+            if #text > count then count = #text end
         end
-        bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; ; margin-left: 30px'>"..maxStr.."</p>")
-        -- bookmarks_dialog['invisible_label']:set_text(string.rep('¢', maxText))
-        -- bookmarks_dialog['invisible_label']:set_text(string.rep('ㅤ', #maxText))
+
+        count = math.ceil(count * 8.5) + 143
+        if count < 480 then
+            bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; margin-left: 4px;'>"..maxText.."</p>")
+        else
+            bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; margin-left: 480px;'>.</p>")
+        end
+
+        bookmarks_dialog['text_input']:set_text('Bookmark (' .. (#Bookmarks + 1) .. ')')
     end
 end
 
@@ -446,13 +463,22 @@ function addBookmark()
                 selectedBookmarkId = nil
             else
                 local b = {}
-                b.time = vlc.var.get(vlc.object.input(), "time")
+                b.time = vlc.var.get(input, "time")
                 b.label = label
                 -- b.addedDate = os.date("%d/%m/%Y %X")
                 b.formattedTime = getFormattedTime(b.time)
-                table_binInsert(Bookmarks, b, function(a, b)
-                    return a.time < b.time
+                local i = table_binInsert(Bookmarks, b, function(a, b)
+                    return a.time <= b.time
                 end)
+
+                if Bookmarks[i] then
+                    if Bookmarks[i].formattedTime == b.formattedTime then
+                    bookmarks_dialog['footer_message']:set_text(
+                        setMessageStyle("Bookmark already added"))
+                        return
+                    end
+                end
+                table.insert(Bookmarks, i, b)
             end
             table_save(Bookmarks, bookmarkFilePath)
             bookmarks_dialog['text_input']:set_text('')
@@ -474,7 +500,7 @@ function goToBookmark()
         if next(selection) then
             if tablelength(selection) == 1 then
                 for idx, _ in pairs(selection) do
-                    vlc.var.set(vlc.object.input(), "time", Bookmarks[idx].time)
+                    vlc.var.set(input, "time", Bookmarks[idx].time)
                     break
                 end
             else
@@ -552,6 +578,10 @@ function dlt_footer()
     end
 end
 
+function setMessageStyle(str)
+    return "<p style='font-size: 15px; margin-left: 8px;'>"..str.."</p>"
+end
+
 -- End GUI Setup and buttons callbacks -------------------------------------
 
 
@@ -581,8 +611,8 @@ end
 
 function info_dialog()
     vlc.msg.dbg("Creating Info dialog")
-    dialog_UI = vlc.dialog("Info")
-    dialog_UI:add_label("Please open a media file before running this extension")
+    dialog_UI = vlc.dialog("Warning")
+    dialog_UI:add_label(setMessageStyle("Please open a media file before running this extension"))
     -- dialog_UI:show()
 end
 
