@@ -524,6 +524,10 @@ function removeBookmark()
 end
 -- End buttons callbacks -------------------------------------------------
 
+function setMessageStyle(str)
+    return "<p style='font-size: 12px; margin-left: 4px;'>" .. str .. "</p>"
+end
+
 function dlt_footer()
     if bookmarks_dialog['footer_message'] then
         bookmarks_dialog['footer_message']:set_text('')
@@ -533,9 +537,6 @@ function dlt_footer()
     end
 end
 
-function setMessageStyle(str)
-    return "<p style='font-size: 15px; margin-left: 8px;'>" .. str .. "</p>"
-end
 
 function close_dlg()
     vlc.msg.dbg("Closing dialog")
@@ -551,7 +552,11 @@ end
 
 function show_main_gui()
     close_dlg()
-    main_dialog()
+    if input then
+        main_dialog()
+    else
+        info_dialog()
+    end
     collectgarbage() -- ~ !important
 end
 
@@ -564,7 +569,7 @@ end
 function info_dialog()
     vlc.msg.dbg("Creating Info dialog")
     dialog_UI = vlc.dialog("Warning")
-    dialog_UI:add_label(setMessageStyle("Please open a media file before running this extension"))
+    dialog_UI:add_label("<p style='font-size: 12px; text-align: center;'>Please open a media file before running this extension</p>")
     -- dialog_UI:show()
 end
 -- End GUI Setup ------------------------------------------------------------
