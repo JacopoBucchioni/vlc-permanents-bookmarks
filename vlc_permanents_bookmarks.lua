@@ -31,37 +31,28 @@ function activate()
         vlc.msg.err(err)
         return false
     end
-
     input = vlc.object.input()
     if input then
         load_bookmarks()
-        show_main_gui()
-    else
-        show_info_gui()
     end
+    show_main_gui()
 end
 
 -- related to capabilities={"input-listener"} in descriptor()
 -- triggered by Start/Stop media input event
 function input_changed()
     vlc.msg.dbg("[Input changed]")
+    close_dlg()
+    mediaFile = nil
+    mediaFile = {}
+    Bookmarks = nil
+    Bookmarks = {}
+    selectedBookmarkId = nil
+    bookmarkFilePath = nil
     input = vlc.object.input()
     if input then
         load_bookmarks()
-        --[[if dialog_UI then
-            showBookmarks()
-            dialog_UI:show()
-        end]]
-        show_main_gui()
-
-    else
-        close_dlg()
-        mediaFile = nil
-        mediaFile = {}
-        Bookmarks = nil
-        Bookmarks = {}
-        selectedBookmarkId = nil
-        bookmarkFilePath = nil
+        --show_main_gui()
     end
     collectgarbage()
 end
@@ -379,7 +370,7 @@ function main_dialog()
     vlc.msg.dbg("Creating main dialog")
     -- Gui positional args
     -- col, row, col_span, row_span, width, height
-    dialog_UI = vlc.dialog("Save your Bookmarks")
+    dialog_UI = vlc.dialog("Save your Bookmarks 🏷️")
     -- rename input box
     dialog_UI:add_button("Add", addBookmark, 1, 1, 1, 1)
     bookmarks_dialog['text_input'] = dialog_UI:add_text_input('Bookmark (' .. (#Bookmarks + 1) .. ')', 2, 1, 1, 1)
