@@ -7,7 +7,7 @@ local bookmarkFilePath = nil
 -- UI
 local dialog_UI = nil
 local bookmarks_dialog = {}
-local dialog_title = "VLC Permanents Bookmarks 🏷️"
+local dialog_title = "VLC Permanents Bookmarks"
 ------------------------------------------------------------------------
 
 -- VLC defined callback functions --------------------------------------
@@ -20,7 +20,7 @@ function descriptor()
         url = 'https://github.com/JacopoBucchioni/vlc-permanents-bookmarks',
         shortdesc = "Bookmarks",
         description = "Save bookmarks for your media files and store them permanently.",
-        capabilities = { "menu", "input-listener" }
+        capabilities = {"menu", "input-listener"}
     }
 end
 
@@ -32,37 +32,10 @@ function activate()
         vlc.msg.err(err)
         return false
     end
-    input = vlc.object.input()
-    if input then
-        load_bookmarks()
-    end
     show_gui()
 end
 
--- related to capabilities={"input-listener"} in descriptor()
--- triggered by Start/Stop media input event
-function input_changed()
-    vlc.msg.dbg("[Input changed]")
-    close_dlg()
-    mediaFile = nil
-    mediaFile = {}
-    Bookmarks = nil
-    Bookmarks = {}
-    selectedBookmarkId = nil
-    bookmarkFilePath = nil
-    input = vlc.object.input()
-    if input then
-        load_bookmarks()
-        --show_main_gui()
-    end
-    collectgarbage()
-end
-
--- triggered by available media input meta data?
-function meta_changed()
-end
-
--- Called when the extension dialog is close
+-- Called when the extension dialog is closed
 function close()
     vlc.deactivate()
 end
@@ -77,7 +50,7 @@ end
 
 -- Called on mouseover on the extension in View menu
 function menu()
-    return { "Show dialog" }
+    return {"Show dialog"}
 end
 
 -- trigger function on menu() function call
@@ -85,11 +58,24 @@ function trigger_menu(dlg_id)
     show_gui()
 end
 
+-- related to capabilities={"input-listener"} in descriptor()
+-- triggered by Start/Stop media input event
+function input_changed() -- ~ !important: deve essere qualcosa di veloce
+    vlc.msg.dbg("[Input changed]")
+    if dialog_UI then
+        dialog_UI:hide()
+    end
+end
+
+-- triggered by available media input meta data?
+function meta_changed()
+    -- return
+end
 -- End VLC defined callback functions ----------------------------------
 
 -- // Bookmarks init function
 function load_bookmarks()
-    mediaFile.title = vlc.input.item():name()
+    -- mediaFile.metaTitle = vlc.input.item():name()
     mediaFile.uri = vlc.input.item():uri()
     if mediaFile.uri then
         local filePath = vlc.strings.make_path(mediaFile.uri)
@@ -106,7 +92,7 @@ function load_bookmarks()
         if not mediaFile.name then
             mediaFile.name = filePath
         end
-        vlc.msg.dbg("Video Meta Title: " .. mediaFile.title)
+        -- vlc.msg.dbg("Video Meta Title: " .. mediaFile.metaTitle)
         vlc.msg.dbg("Video URI: " .. mediaFile.uri)
         vlc.msg.dbg("fileName: " .. mediaFile.name)
         vlc.msg.dbg("fileDir: " .. tostring(mediaFile.dir))
@@ -115,6 +101,7 @@ function load_bookmarks()
         if mediaFile.hash then
             bookmarkFilePath = bookmarksDir .. slash .. mediaFile.hash
             Bookmarks = table_load(bookmarkFilePath)
+            input = vlc.object.input()
         end
     end
     collectgarbage()
@@ -124,14 +111,13 @@ function getFileHash()
     -- Calculate media hash
     local data_start = ""
     local data_end = ""
-    local chunk_size = 65536
     local size
+    local chunk_size = 65536
     local ok
     local err
 
     -- Get data for hash calculation
-    vlc.msg.dbg("init Read hash data from stream")
-
+    vlc.msg.dbg("init read hash data from stream")
     local stream = vlc.stream(mediaFile.uri)
     data_start = stream:read(chunk_size)
     ok, size = pcall(stream.getsize, stream)
@@ -141,21 +127,19 @@ function getFileHash()
     end
     mediaFile.bytesize = size
     vlc.msg.dbg("File bytesize: " .. mediaFile.bytesize)
-
-    size = math.floor(size / 2)
+    -- size = math.floor(size / 2)
     ok, err = pcall(stream.seek, stream, size - chunk_size)
     if not ok then
-        vlc.msg.warn("Failed to seek to the middle of the stream: " .. err)
+        vlc.msg.warn("Failed to seek the stream: " .. err)
         return false
     end
-    -- data_start = stream:read(chunk_size)
     data_end = stream:read(chunk_size)
-    vlc.msg.dbg("finish Read hash data from stream")
     -- stream = nil
+    vlc.msg.dbg("finish Read hash data from stream")
 
     -- Hash calculation
-    local lo = mediaFile.bytesize
-    -- local lo = size
+    -- local lo = mediaFile.bytesize
+    local lo = size
     local hi = 0
     local o, a, b, c, d, e, f, g, h
     local hash_data = data_start .. data_end
@@ -182,24 +166,20 @@ function getFileHash()
     mediaFile.hash = string.format("%08x%08x", hi, lo)
     vlc.msg.dbg("File hash: " .. mediaFile.hash)
     collectgarbage()
-    -- return true
+    return true
 end
 
 -- // system check and extension config
 function check_config()
     slash = package.config:sub(1, 1)
-    --[[if slash == "\\" then
-        os = "win"
-    else
-        os = "lin"
-    end]]
+
     bookmarksDir = vlc.config.userdatadir()
     local res, err = vlc.io.mkdir(bookmarksDir, "0700")
     if res ~= 0 and err ~= vlc.errno.EEXIST then
         vlc.msg.warn("Failed to create " .. bookmarksDir)
         return false
     end
-    local subdirs = { "lua", "extensions", "userdata", "bookmarks" }
+    local subdirs = {"lua", "extensions", "userdata", "bookmarks"}
     for _, dir in ipairs(subdirs) do
         res, err = vlc.io.mkdir(bookmarksDir .. slash .. dir, "0700")
         if res ~= 0 and err ~= vlc.errno.EEXIST then
@@ -211,10 +191,10 @@ function check_config()
 
     if bookmarksDir then
         vlc.msg.dbg("Bookmarks directory: " .. bookmarksDir)
-        -- return true
     end
+
     collectgarbage()
-    -- return true
+    return true
 end
 
 -- // The Save Function
@@ -230,7 +210,7 @@ function table_save(t, filePath)
     end
 
     -- initiate variables for save procedure
-    local tables, lookup = { t }, {
+    local tables, lookup = {t}, {
         [t] = 1
     }
     file:write("return {" .. charE)
@@ -313,7 +293,7 @@ function table_load(filePath)
                 tables[idx][i] = tables[v[1]]
             end
             if type(i) == "table" and tables[i[1]] then
-                table.insert(tolinki, { i, tables[i[1]] })
+                table.insert(tolinki, {i, tables[i[1]]})
             end
         end
         -- link indices
@@ -357,36 +337,36 @@ function table_length(t)
 end
 
 -- // get number rappresenting time in microseconds and return a string with formatted time hh:mm:ss.millis
-function getFormattedTime(time)
-    local milliseconds = math.floor(time / 1000)
-    local seconds = math.floor((milliseconds / 1000) % 60)
-    local minutes = math.floor((milliseconds / 60000) % 60)
-    local hours = math.floor((milliseconds / 3600000) % 24)
-    milliseconds = math.floor(milliseconds % 1000)
-    return string.format("%02d:%02d:%02d.%03d", hours, minutes, seconds, milliseconds)
+function getFormattedTime(micros)
+    local millis = math.floor(micros / 1000)
+    local seconds = math.floor((millis / 1000) % 60)
+    local minutes = math.floor((millis / 60000) % 60)
+    local hours = math.floor((millis / 3600000) % 24)
+    millis = math.floor(millis % 1000)
+    return string.format("%02d:%02d:%02d.%03d", hours, minutes, seconds, millis)
 end
 
 -- GUI Setup and buttons callbacks ----------------------------------------
--- Create the main dialog
+-- Create the main bookmarks dialog
 function main_dialog()
     vlc.msg.dbg("Creating main dialog")
-    -- Gui positional args
-    -- col, row, col_span, row_span, width, height
+    -- Gui positional args: col, row, col_span, row_span, width, height
     dialog_UI = vlc.dialog(dialog_title)
-    -- rename input box
+    -- ~ !important: Add button must be the first item that is created
     dialog_UI:add_button("Add", addBookmark, 1, 1, 1, 1)
+    -- bookmarks labels input box
     bookmarks_dialog['text_input'] = dialog_UI:add_text_input('Bookmark (' .. (#Bookmarks + 1) .. ')', 2, 1, 1, 1)
     -- buttons
     dialog_UI:add_button("Go", goToBookmark, 1, 2, 1, 1)
     dialog_UI:add_button("Rename", editBookmark, 1, 3, 1, 1)
     dialog_UI:add_button("Remove", removeBookmark, 1, 4, 1, 1)
-    dialog_UI:add_button("Close", deactivate, 1, 5, 1, 1)
-    -- dialog_UI:add_button("Import csv", show_import_gui, 1, 10, 1, 1)
-    -- dialog_UI:add_button("Export csv", show_export_gui, 1, 11, 1, 1)
+    dialog_UI:add_button("Close", vlc.deactivate, 1, 5, 1, 1)
+    -- dialog_UI:add_button("Import", show_import_gui, 1, 10, 1, 1)
+    -- dialog_UI:add_button("Export", show_export_gui, 1, 11, 1, 1)
     -- bookmarks list
-    bookmarks_dialog['invisible_label'] = dialog_UI:add_label('', 2, 2, 0, 0) -- ~ !important: invisible_label BEFORE bookmarks_list
+    bookmarks_dialog['invisible_label'] = dialog_UI:add_label('', 2, 2, 0, 0) -- ~ !important: invisible_label must be created before bookmarks_list
     bookmarks_dialog['bookmarks_list'] = dialog_UI:add_list(2, 2, 1, 14)
-    -- message_label
+    -- footer message_label
     bookmarks_dialog['footer_message'] = dialog_UI:add_label('', 2, 16, 1, 1)
     showBookmarks()
     dialog_UI:show()
@@ -413,7 +393,7 @@ function showBookmarks()
         count = math.ceil(count * 8.5) + 143 -- works :)
         if count < 480 then -- max dialog width = 480px
             bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; margin-left: 24px;'>" .. maxText ..
-                "</p>")
+                                                             "</p>")
         else
             bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; margin-left: 480px;'>.</p>")
         end
@@ -486,7 +466,6 @@ function editBookmark()
                 for idx, _ in pairs(selection) do
                     bookmarks_dialog['text_input']:set_text(Bookmarks[idx].label)
                     selectedBookmarkId = idx
-                    -- break
                     return
                 end
             else
@@ -515,7 +494,6 @@ function removeBookmark()
         end
     end
 end
-
 -- End buttons callbacks -------------------------------------------------
 
 function setMessageStyle(str)
@@ -525,9 +503,6 @@ end
 function dlt_footer()
     if bookmarks_dialog['footer_message'] then
         bookmarks_dialog['footer_message']:set_text('')
-        --[[dialog_UI:del_widget(bookmarks_dialog['footer_message'])
-        bookmarks_dialog['footer_message'] = nil
-        collectgarbage()]]
     end
 end
 
@@ -540,29 +515,33 @@ function close_dlg()
     dialog_UI = nil
     bookmarks_dialog = nil
     bookmarks_dialog = {}
+
+    --[[mediaFile = nil
+    mediaFile = {}
+    input = nil
+    Bookmarks = nil
+    Bookmarks = {}
+    selectedBookmarkId = nil
+    bookmarkFilePath = nil]]
+
     collectgarbage() -- ~ !important
 end
 
 function show_gui()
     close_dlg()
-    if input then
+    if vlc.input.item() then
+        load_bookmarks()
         main_dialog()
     else
-        info_dialog()
+        noinput_dialog()
     end
     collectgarbage() -- ~ !important
 end
 
-function info_dialog()
-    vlc.msg.dbg("Creating Info dialog")
+function noinput_dialog()
+    vlc.msg.dbg("Creating noinput dialog")
     dialog_UI = vlc.dialog(dialog_title)
-    dialog_UI:add_label("<p style='font-size: 12px; text-align: center;'>Please open a media file before running this extension</p>")
+    dialog_UI:add_label(
+        "<p style='font-size: 12px; text-align: center;'>Please open a media file before running this extension</p>")
     -- dialog_UI:show()
 end
-
---[[function show_info_gui()
-    close_dlg()
-    info_dialog()
-    collectgarbage() -- ~ !important
-end]]
--- End GUI Setup ------------------------------------------------------------
