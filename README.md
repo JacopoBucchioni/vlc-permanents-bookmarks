@@ -1,4 +1,4 @@
-# VLC Permanents Bookmarks 🏷️
+# VLC Permanents Bookmarks
 This VLC extension allows you to save bookmarks for your media files and store them permanently.
 
 ## Overview
