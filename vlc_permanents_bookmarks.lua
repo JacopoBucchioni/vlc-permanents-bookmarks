@@ -15,7 +15,7 @@ local dialog_title = "VLC Permanents Bookmarks"
 function descriptor()
     return {
         title = dialog_title,
-        version = "0.1",
+        version = "1.0",
         author = "Bucchio",
         url = 'https://github.com/JacopoBucchioni/vlc-permanents-bookmarks',
         shortdesc = "Bookmarks",
@@ -427,6 +427,7 @@ function addBookmark()
                         return
                     end
                 end
+                
                 table.insert(Bookmarks, i, b)
             end
             table_save(Bookmarks, bookmarkFilePath)
