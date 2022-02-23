@@ -14,7 +14,7 @@ Create a directory 'extensions' at this location if it doesn't exists, then down
 - Mac OS X (all users):`/Applications/VLC.app/Contents/MacOS/share/lua/extensions/`
 - Mac OS X (current user): `/Users/user_name/Library/Application\ Support/org.videolan.vlc/lua/extensions/`
 
-Change program_files to the path of your vlc program
+Change 'program_files' to the path of your vlc program
 change  `user_name` to your username.
 
 ## Usage
