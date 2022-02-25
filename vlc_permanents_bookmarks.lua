@@ -15,7 +15,7 @@ local dialog_title = "VLC Permanents Bookmarks"
 function descriptor()
     return {
         title = dialog_title,
-        version = "1.0",
+        version = "1.0.1",
         author = "Bucchio",
         url = 'https://github.com/JacopoBucchioni/vlc-permanents-bookmarks',
         shortdesc = "Bookmarks",
@@ -64,6 +64,14 @@ function input_changed() -- ~ !important: deve essere qualcosa di veloce
     vlc.msg.dbg("[Input changed]")
     if dialog_UI then
         dialog_UI:hide()
+
+        input = nil
+        mediaFile = nil
+        mediaFile = {}
+        Bookmarks = nil
+        Bookmarks = {}
+        selectedBookmarkId = nil
+        bookmarkFilePath = nil
     end
 end
 
@@ -352,10 +360,12 @@ function main_dialog()
     vlc.msg.dbg("Creating main dialog")
     -- Gui positional args: col, row, col_span, row_span, width, height
     dialog_UI = vlc.dialog(dialog_title)
+
     -- ~ !important: Add button must be the first item that is created
     dialog_UI:add_button("Add", addBookmark, 1, 1, 1, 1)
     -- bookmarks labels input box
     bookmarks_dialog['text_input'] = dialog_UI:add_text_input('Bookmark (' .. (#Bookmarks + 1) .. ')', 2, 1, 1, 1)
+
     -- buttons
     dialog_UI:add_button("Go", goToBookmark, 1, 2, 1, 1)
     dialog_UI:add_button("Rename", editBookmark, 1, 3, 1, 1)
@@ -363,11 +373,15 @@ function main_dialog()
     dialog_UI:add_button("Close", vlc.deactivate, 1, 5, 1, 1)
     -- dialog_UI:add_button("Import", show_import_gui, 1, 10, 1, 1)
     -- dialog_UI:add_button("Export", show_export_gui, 1, 11, 1, 1)
+
     -- bookmarks list
-    bookmarks_dialog['invisible_label'] = dialog_UI:add_label('', 2, 2, 0, 0) -- ~ !important: invisible_label must be created before bookmarks_list
+    -- ~ !important: invisible_label must be created before bookmarks_list
+    bookmarks_dialog['invisible_label'] = dialog_UI:add_label('', 2, 2, 0, 0)
     bookmarks_dialog['bookmarks_list'] = dialog_UI:add_list(2, 2, 1, 14)
+
     -- footer message_label
     bookmarks_dialog['footer_message'] = dialog_UI:add_label('', 2, 16, 1, 1)
+
     showBookmarks()
     dialog_UI:show()
 end
@@ -390,15 +404,14 @@ function showBookmarks()
                 count = #text
             end
         end
-        count = math.ceil(count * 8.5) + 143 -- works :)
-        if count < 480 then -- max dialog width = 480px
+        -- max dialog width = 480px
+        count = math.floor(count * 8.5) + 140 -- TODO: ??
+        if count < 480 then
             bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; margin-left: 24px;'>" .. maxText ..
                                                              "</p>")
         else
             bookmarks_dialog['invisible_label']:set_text("<p style='font-size: 15px; margin-left: 480px;'>.</p>")
         end
-
-        bookmarks_dialog['text_input']:set_text('Bookmark (' .. (#Bookmarks + 1) .. ')')
     end
 end
 
@@ -409,30 +422,30 @@ function addBookmark()
         local label = bookmarks_dialog['text_input']:get_text()
         if string.len(label) > 0 then
             if selectedBookmarkId ~= nil then
+                -- rename an existing bookmark
                 Bookmarks[selectedBookmarkId].label = label
                 selectedBookmarkId = nil
             else
+                -- add a new bookmark
                 local b = {}
                 b.time = vlc.var.get(input, "time")
                 b.label = label
-                -- b.addedDate = os.date("%d/%m/%Y %X")
                 b.formattedTime = getFormattedTime(b.time)
                 local i = table_binInsert(Bookmarks, b, function(a, b)
                     return a.time <= b.time
                 end)
-
+                -- bookmark with same time already present
                 if Bookmarks[i] then
                     if Bookmarks[i].formattedTime == b.formattedTime then
                         bookmarks_dialog['footer_message']:set_text(setMessageStyle("Bookmark already added"))
                         return
                     end
                 end
-                
                 table.insert(Bookmarks, i, b)
             end
             table_save(Bookmarks, bookmarkFilePath)
-            bookmarks_dialog['text_input']:set_text('')
             showBookmarks()
+            bookmarks_dialog['text_input']:set_text('Bookmark (' .. (#Bookmarks + 1) .. ')')
         else
             bookmarks_dialog['footer_message']:set_text(setMessageStyle("Please enter your bookmark title"))
         end
@@ -484,7 +497,14 @@ function removeBookmark()
         local selection = bookmarks_dialog['bookmarks_list']:get_selection()
         if next(selection) then
             local count = 0
-            for idx, _ in pairs(selection) do
+            -- sort selection by ids
+            local selectionSorted = {}
+            for id in pairs(selection) do
+                table.insert(selectionSorted, id)
+            end
+            table.sort(selectionSorted)
+
+            for _, idx in pairs(selectionSorted) do
                 table.remove(Bookmarks, idx - count)
                 count = count + 1
             end
@@ -516,22 +536,15 @@ function close_dlg()
     dialog_UI = nil
     bookmarks_dialog = nil
     bookmarks_dialog = {}
-
-    --[[mediaFile = nil
-    mediaFile = {}
-    input = nil
-    Bookmarks = nil
-    Bookmarks = {}
-    selectedBookmarkId = nil
-    bookmarkFilePath = nil]]
-
     collectgarbage() -- ~ !important
 end
 
 function show_gui()
     close_dlg()
     if vlc.input.item() then
-        load_bookmarks()
+        if not input then
+            load_bookmarks()
+        end
         main_dialog()
     else
         noinput_dialog()
