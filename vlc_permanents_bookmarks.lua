@@ -456,6 +456,7 @@ function goToBookmark()
     dlt_footer()
     if bookmarks_dialog['bookmarks_list'] then
         local selection = bookmarks_dialog['bookmarks_list']:get_selection()
+        selectedBookmarkId = nil
         if next(selection) then
             if table_length(selection) == 1 then
                 for idx, _ in pairs(selection) do
@@ -475,6 +476,7 @@ function editBookmark()
     dlt_footer()
     if bookmarks_dialog['bookmarks_list'] then
         local selection = bookmarks_dialog['bookmarks_list']:get_selection()
+        selectedBookmarkId = nil
         if next(selection) then
             if table_length(selection) == 1 then
                 for idx, _ in pairs(selection) do
@@ -495,6 +497,7 @@ function removeBookmark()
     dlt_footer()
     if bookmarks_dialog['bookmarks_list'] then
         local selection = bookmarks_dialog['bookmarks_list']:get_selection()
+        selectedBookmarkId = nil
         if next(selection) then
             local count = 0
             -- sort selection by ids
