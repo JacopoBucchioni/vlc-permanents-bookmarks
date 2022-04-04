@@ -24,4 +24,4 @@ change  `user_name` to your username.
 - And start adding bookmarks like the default `Custom Bookmarks` of vlc but permanently stored on file closure
 
 ## Feature
-- The extension use an hash algorithm to associate bookmarks to the media files, so it works even if the files are moved or renamed, as long as their contents are not changed
+- To associate each bookmark file with the respective media file this extension use an hash algorithm, so that it works even if the files are moved or renamed, as long as their contents are not changed
