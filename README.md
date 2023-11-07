@@ -11,6 +11,7 @@ Create a directory `extensions` at this location if it doesn't exists, then down
 - Windows (current user): `%APPDATA%\vlc\lua\extensions\`
 - Linux (all users): `/usr/lib/vlc/lua/extensions/`
 - Linux (current user): `~/.local/share/vlc/lua/extensions/`
+- Linux (flatpak, current user): `~/.local/share/flatpak/app/org.videolan.VLC/x86_64/stable/active/files/lib/vlc/lua/extensions`
 - Mac OS X (all users):`/Applications/VLC.app/Contents/MacOS/share/lua/extensions/`
 - Mac OS X (current user): `/Users/user_name/Library/Application\ Support/org.videolan.vlc/lua/extensions/`
 
